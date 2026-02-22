@@ -690,3 +690,6 @@ lsof -i :8080                 # Linux/Mac
 
 This project is for educational/evaluation purposes.
 
+##  Author
+Rojeh Music Solutions GmbH :D ^_^
+

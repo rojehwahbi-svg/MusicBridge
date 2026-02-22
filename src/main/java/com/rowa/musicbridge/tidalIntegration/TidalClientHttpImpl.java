@@ -24,6 +24,13 @@ public class TidalClientHttpImpl implements TidalClient {
     private static final Logger log = LoggerFactory.getLogger(TidalClientHttpImpl.class);
     private static final String GERMANY_COUNTRY_CODE = "DE";
 
+    // Retry-Konfiguration for 419 Too Many Requests
+    private static final int MAX_RETRIES = 3;
+    // Initial backoff in milliseconds, doubles with each retry
+    private static final long INITIAL_BACKOFF_MS = 500;
+    // Multiplier for exponential backoff
+    private static final double BACKOFF_MULTIPLIER = 2.0;
+
     private final WebClient webClient;
     private final TidalTokenService tokenService;
 
@@ -97,6 +104,44 @@ public class TidalClientHttpImpl implements TidalClient {
     }
 
     /**
+     * Helper method to fetch track details with retry logic for 419 Too Many Requests
+     * @param token Access token
+     * @param trackId TIDAL track ID
+     * @return TidalSearchResultsResponse with track and included artists, or null if failed
+     */
+    private TidalSearchResultsResponse fetchTrackWithRetry(String token, String trackId) {
+        long backoffMs = INITIAL_BACKOFF_MS;
+
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return webClient.get().uri(uriBuilder -> uriBuilder.path("/v2/tracks/{id}").queryParam("countryCode", GERMANY_COUNTRY_CODE).queryParam("include", "artists").build(trackId)).header("Authorization", "Bearer " + token).header("Accept", "application/vnd.api+json").retrieve().bodyToMono(TidalSearchResultsResponse.class).block();
+
+            } catch (WebClientResponseException e) {
+                if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS && attempt < MAX_RETRIES) {
+                    log.warn("Rate limited for track {}. Retry {} of {} after {}ms", trackId, attempt + 1, MAX_RETRIES, backoffMs);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.warn("Retry sleep interrupted for track {}", trackId);
+                        return null;
+                    }
+                    backoffMs = (long) (backoffMs * BACKOFF_MULTIPLIER);
+                } else {
+                    log.warn("Error fetching artists for track {}: {}", trackId, e.getStatusCode());
+                    return null;
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching artists for track {}: {}", trackId, e.getMessage());
+                return null;
+            }
+        }
+
+        log.warn("Max retries exceeded for track {}", trackId);
+        return null;
+    }
+
+    /**
      * Search for tracks and extract artists (new working approach)
      * 1. Search with query → get track IDs
      * 2. For each track, fetch with include=artists → get artist IDs
@@ -141,29 +186,10 @@ public class TidalClientHttpImpl implements TidalClient {
             List<TidalArtistDto> allArtists = new ArrayList<>();
             
             for (String trackId : trackIds) {
-                try {
-                    TidalSearchResultsResponse trackResp = webClient.get()
-                            .uri(uriBuilder -> uriBuilder
-                                    .path("/v2/tracks/{id}")
-                                    .queryParam("countryCode", GERMANY_COUNTRY_CODE)
-                                    .queryParam("include", "artists")
-                                    .build(trackId))
-                            .header("Authorization", "Bearer " + token)
-                            .header("Accept", "application/vnd.api+json")
-                            .retrieve()
-                            .bodyToMono(TidalSearchResultsResponse.class)
-                            .block();
+                TidalSearchResultsResponse trackResp = fetchTrackWithRetry(token, trackId);
 
-                    if (trackResp != null && trackResp.getIncluded() != null) {
-                        trackResp.getIncluded().stream()
-                                .filter(resource -> "artists".equals(resource.getType()))
-                                .map(TidalArtistDto::fromResource)
-                                .filter(artist -> artist != null && artist.getName() != null)
-                                .forEach(allArtists::add);
-                    }
-                    
-                } catch (Exception e) {
-                    log.warn("Error fetching artists for track {}: {}", trackId, e.getMessage());
+                if (trackResp != null && trackResp.getIncluded() != null) {
+                    trackResp.getIncluded().stream().filter(resource -> "artists".equals(resource.getType())).map(TidalArtistDto::fromResource).filter(artist -> artist != null && artist.getName() != null).forEach(allArtists::add);
                 }
             }
 
