@@ -1,0 +1,45 @@
+
+spring:
+  profiles:
+    active: prod
+  application:
+    name: Musicbridge
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: debug
+
+tidal:
+  api:
+    base-url: ${TIDAL_API_BASE_URL:https://openapi.tidal.com}
+    client-id: ${TIDAL_CLIENT_ID}
+    client-secret: ${TIDAL_CLIENT_SECRET}
+    Auth-base-url: ${TIDAL_AUTH_BASE_URL:https://auth.tidal.com}
+    token-endpoint: ${TIDAL_TOKEN_ENDPOINT:/v1/oauth2/token}
+  sync:
+    default-search-query: ${TIDAL_SEARCH_QUERY:best rock songs}  # Default search query
+    default-track-limit: ${TIDAL_TRACK_LIMIT:50}  # Default track limit
+    initial-sync-on-startup: ${TIDAL_SYNC_ON_STARTUP:false} # Sync on startup an/aus
+    scheduled:
+      enabled: ${TIDAL_SYNC_SCHEDULED_ENABLED:false}                          # Scheduled Sync an/aus
+      cron: ${TIDAL_SYNC_CRON:0 0 2 * * *} # default every day at 2 AM
