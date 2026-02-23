@@ -641,11 +641,6 @@ CREATE TABLE albums (
 - ✅ No hardcoded credentials in code
 - ✅ Database passwords configurable per environment
 
-## 📝 Additional Documentation
-
-- [ENV_VARIABLES.md](ENV_VARIABLES.md) - Complete environment variable reference
-- [CODE_REVIEW.txt](CODE_REVIEW.txt) - Code review findings and fixes
-
 ## 🐛 Troubleshooting
 
 ### Database Connection Failed
@@ -672,10 +667,6 @@ java -version  # Should be 17+
 # Verify credentials in .env file
 cat .env | grep TIDAL_CLIENT
 
-# Reload environment variables
-.\load-env.ps1  # Windows
-source .env     # Linux/Mac
-```
 
 ### Port 8080 Already in Use
 ```bash
